@@ -19,6 +19,7 @@ import textwrap
 import time
 from collections import defaultdict
 from typing import Dict, List, Optional, Tuple, Union
+from collections.abc import Callable
 
 import numpy as np
 import pandas as pd
@@ -67,6 +68,14 @@ if is_wandb_available():
 INVALID_LOGPROB = 1.0
 
 
+RewardFunction = Callable[[torch.Tensor, torch.Tensor, Optional[int]], torch.Tensor]
+"""
+- First argument: query token ids
+- Second argument: response token ids
+- Third argument: pad token id
+"""
+
+
 # taken from https://github.com/OpenLMLab/MOSS-RLHF/blob/40b91eb2f2b71b16919addede0341d2bef70825d/ppo/ppo_trainer.py#L29
 # we did this we can do a single `model = accelerator.prepare(model)`
 class PolicyAndValueWrapper(nn.Module):
@@ -93,7 +102,9 @@ class PPOv2Trainer(Trainer):
         tokenizer: PreTrainedTokenizer,
         policy: nn.Module,
         ref_policy: nn.Module,
-        reward_model: nn.Module,
+        # NOTE(marco) replaced the reward model with a function
+        # reward_model: nn.Module,
+        reward_func: RewardFunction,
         train_dataset: Dataset,
         value_model: Optional[nn.Module] = None,
         data_collator: Optional[DataCollatorWithPadding] = None,
@@ -119,7 +130,9 @@ class PPOv2Trainer(Trainer):
         self.policy.generation_config.pad_token_id = None  # generate tokens without truncation / padding
 
         self.ref_policy = ref_policy
-        self.reward_model = reward_model
+        # NOTE(marco) replaced the reward model with a function
+        # self.reward_model = reward_model
+        self.reward_func = reward_func
         self.train_dataset = train_dataset
         self.train_dataset_len = len(train_dataset)
         self.value_model = value_model
@@ -166,7 +179,9 @@ class PPOv2Trainer(Trainer):
         #########
         # setup model, optimizer, and others
         #########
-        for module in [policy, ref_policy, value_model, reward_model]:
+        # NOTE(marco) we don't have a reward_model anymore
+        # for module in [policy, ref_policy, value_model, reward_model]:
+        for module in [policy, ref_policy, value_model]:
             disable_dropout_in_model(module)
         if args.stop_token and args.stop_token == "eos":
             args.stop_token_id = tokenizer.eos_token_id
@@ -233,15 +248,17 @@ class PPOv2Trainer(Trainer):
         self.eval_dataloader = accelerator.prepare(self.eval_dataloader)
 
         if self.is_deepspeed_enabled:
-            self.reward_model = prepare_deepspeed(
-                self.reward_model, args.per_device_train_batch_size, args.fp16, args.bf16
-            )
+            # NOTE(marco) we don't have a reward_model anymore
+            # self.reward_model = prepare_deepspeed(
+            #     self.reward_model, args.per_device_train_batch_size, args.fp16, args.bf16
+            # )
             self.ref_policy = prepare_deepspeed(
                 self.ref_policy, args.per_device_train_batch_size, args.fp16, args.bf16
             )
         else:
             self.ref_policy = self.ref_policy.to(self.accelerator.device)
-            self.reward_model = self.reward_model.to(self.accelerator.device)
+            # NOTE(marco) we don't have a reward_model anymore
+            # self.reward_model = self.reward_model.to(self.accelerator.device)
 
     def get_train_dataloader(self) -> DataLoader:
         return self.dataloader
@@ -270,7 +287,8 @@ class PPOv2Trainer(Trainer):
         optimizer = self.optimizer
         model = self.model
         ref_policy = self.ref_policy
-        reward_model = self.reward_model
+        # NOTE(marco) we don't have a reward_model anymore
+        # reward_model = self.reward_model
         tokenizer = self.tokenizer
         dataloader = self.dataloader
         device = accelerator.device
@@ -383,9 +401,11 @@ class PPOv2Trainer(Trainer):
                         unwrapped_value_model, query_response, tokenizer.pad_token_id, context_length
                     )
                     value = full_value[:, context_length - 1 : -1].squeeze(-1)
-                    _, score, _ = get_reward(
-                        reward_model, postprocessed_query_response, tokenizer.pad_token_id, context_length
-                    )
+                    # NOTE(marco) we have modified this code to use an arbitrary reward function
+                    # _, score, _ = get_reward(
+                    #     reward_model, postprocessed_query_response, tokenizer.pad_token_id, context_length
+                    # )
+                    score = self.reward_func(query, postprocessed_response, tokenizer.pad_token_id)
 
                     responses.append(response)
                     postprocessed_responses.append(postprocessed_response)
@@ -630,10 +650,12 @@ class PPOv2Trainer(Trainer):
                     table["query"].extend(gather_object(tokenizer.batch_decode(query, skip_special_tokens=True)))
                     table["model response"].extend(gather_object(tokenizer.batch_decode(postprocessed_response)))
 
-                    postprocessed_query_response = torch.cat((query, postprocessed_response), 1)
-                    _, score, _ = get_reward(
-                        self.reward_model, postprocessed_query_response, tokenizer.pad_token_id, context_length
-                    )
+                    # NOTE(marco) we have modified this code to use an arbitrary reward function
+                    # postprocessed_query_response = torch.cat((query, postprocessed_response), 1)
+                    # _, score, _ = get_reward(
+                    #     self.reward_model, postprocessed_query_response, tokenizer.pad_token_id, context_length
+                    # )
+                    score = self.reward_func(query, postprocessed_response, tokenizer.pad_token_id)
                     table["score"].extend(self.accelerator.gather(score).float().cpu().numpy())
 
                 if sampling:
