@@ -68,6 +68,7 @@ if is_wandb_available():
 INVALID_LOGPROB = 1.0
 
 
+# NOTE(marco) added reward function
 RewardFunction = Callable[[torch.Tensor, torch.Tensor, Optional[int]], torch.Tensor]
 """
 - First argument: query token ids
