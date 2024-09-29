@@ -69,11 +69,10 @@ INVALID_LOGPROB = 1.0
 
 
 # NOTE(marco) added reward function
-RewardFunction = Callable[[torch.Tensor, torch.Tensor, Optional[int]], torch.Tensor]
+RewardFunction = Callable[[torch.Tensor, Optional[int]], torch.Tensor]
 """
-- First argument: query token ids
-- Second argument: response token ids
-- Third argument: pad token id
+- First argument: token ids
+- Second argument: pad token id
 """
 
 
@@ -406,7 +405,7 @@ class PPOv2Trainer(Trainer):
                     # _, score, _ = get_reward(
                     #     reward_model, postprocessed_query_response, tokenizer.pad_token_id, context_length
                     # )
-                    score = self.reward_func(query, postprocessed_response, tokenizer.pad_token_id)
+                    score = self.reward_func(postprocessed_query_response, tokenizer.pad_token_id)
 
                     responses.append(response)
                     postprocessed_responses.append(postprocessed_response)
@@ -651,12 +650,12 @@ class PPOv2Trainer(Trainer):
                     table["query"].extend(gather_object(tokenizer.batch_decode(query, skip_special_tokens=True)))
                     table["model response"].extend(gather_object(tokenizer.batch_decode(postprocessed_response)))
 
+                    postprocessed_query_response = torch.cat((query, postprocessed_response), 1)
                     # NOTE(marco) we have modified this code to use an arbitrary reward function
-                    # postprocessed_query_response = torch.cat((query, postprocessed_response), 1)
                     # _, score, _ = get_reward(
                     #     self.reward_model, postprocessed_query_response, tokenizer.pad_token_id, context_length
                     # )
-                    score = self.reward_func(query, postprocessed_response, tokenizer.pad_token_id)
+                    score = self.reward_func(postprocessed_query_response, tokenizer.pad_token_id)
                     table["score"].extend(self.accelerator.gather(score).float().cpu().numpy())
 
                 if sampling:
