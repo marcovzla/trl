@@ -651,6 +651,9 @@ class SFTTrainer(Trainer):
             tags=tags,
             wandb_url=wandb.run.get_url() if is_wandb_available() and wandb.run is not None else None,
             trainer_name="SFT",
+            trainer_citation=None,
+            paper_title=None,
+            paper_id=None,
         )
 
         model_card.save(os.path.join(self.args.output_dir, "README.md"))
