@@ -53,7 +53,7 @@ from trl import (
     GKDTrainer,
     LogCompletionsCallback,
     ModelConfig,
-    SFTScriptArguments,
+    ScriptArguments,
     TrlParser,
     get_kbit_device_map,
     get_peft_config,
@@ -62,7 +62,7 @@ from trl import (
 
 
 if __name__ == "__main__":
-    parser = TrlParser((SFTScriptArguments, GKDConfig, ModelConfig))
+    parser = TrlParser((ScriptArguments, GKDConfig, ModelConfig))
     script_args, training_args, model_config = parser.parse_args_and_config()
 
     ################
@@ -93,6 +93,7 @@ if __name__ == "__main__":
 
     tokenizer = AutoTokenizer.from_pretrained(
         model_config.model_name_or_path,
+        revision=model_config.model_revision,
         trust_remote_code=model_config.trust_remote_code,
         padding_side="left",
     )
@@ -120,15 +121,18 @@ if __name__ == "__main__":
         teacher_model=training_args.teacher_model_name_or_path,
         args=training_args,
         train_dataset=dataset[script_args.dataset_train_split],
-        eval_dataset=dataset[script_args.dataset_test_split],
-        tokenizer=tokenizer,
+        eval_dataset=dataset[script_args.dataset_test_split] if training_args.eval_strategy != "no" else None,
+        processing_class=tokenizer,
         peft_config=get_peft_config(model_config),
     )
-    generation_config = GenerationConfig(
-        max_new_tokens=training_args.max_new_tokens, do_sample=True, temperature=training_args.temperature
-    )
-    completions_callback = LogCompletionsCallback(trainer, generation_config, num_prompts=8)
-    trainer.add_callback(completions_callback)
+
+    if training_args.eval_strategy != "no":
+        generation_config = GenerationConfig(
+            max_new_tokens=training_args.max_new_tokens, do_sample=True, temperature=training_args.temperature
+        )
+        completions_callback = LogCompletionsCallback(trainer, generation_config, num_prompts=8)
+        trainer.add_callback(completions_callback)
+
     trainer.train()
 
     # Save and push to hub

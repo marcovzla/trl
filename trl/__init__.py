@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-__version__ = "0.12.0.dev0"
+__version__ = "0.13.0.dev0"
 
 from typing import TYPE_CHECKING
 
@@ -36,8 +36,7 @@ _import_structure = {
     "import_utils": [
         "is_deepspeed_available",
         "is_diffusers_available",
-        "is_liger_kernel_available",
-        "is_llmblender_available",
+        "is_llm_blender_available",
     ],
     "models": [
         "SUPPORTED_ARCHITECTURES",
@@ -80,8 +79,6 @@ _import_structure = {
         "PairRMJudge",
         "PPOConfig",
         "PPOTrainer",
-        "PPOv2Config",
-        "PPOv2Trainer",
         "RandomPairwiseJudge",
         "RandomRankJudge",
         "RewardConfig",
@@ -96,6 +93,7 @@ _import_structure = {
     ],
     "trainer.callbacks": ["RichProgressCallback", "SyncRefModelCallback"],
     "trainer.utils": ["get_kbit_device_map", "get_peft_config", "get_quantization_config"],
+    "utils": ["ScriptArguments"],
 }
 
 try:
@@ -128,12 +126,7 @@ if TYPE_CHECKING:
     )
     from .environment import TextEnvironment, TextHistory
     from .extras import BestOfNSampler
-    from .import_utils import (
-        is_deepspeed_available,
-        is_diffusers_available,
-        is_liger_kernel_available,
-        is_llmblender_available,
-    )
+    from .import_utils import is_deepspeed_available, is_diffusers_available, is_llm_blender_available
     from .models import (
         SUPPORTED_ARCHITECTURES,
         AutoModelForCausalLMWithValueHead,
@@ -175,8 +168,6 @@ if TYPE_CHECKING:
         PairRMJudge,
         PPOConfig,
         PPOTrainer,
-        PPOv2Config,
-        PPOv2Trainer,
         RandomPairwiseJudge,
         RandomRankJudge,
         RewardConfig,
@@ -191,6 +182,7 @@ if TYPE_CHECKING:
     )
     from .trainer.callbacks import RichProgressCallback, SyncRefModelCallback
     from .trainer.utils import get_kbit_device_map, get_peft_config, get_quantization_config
+    from .utils import ScriptArguments
 
     try:
         if not is_diffusers_available():
